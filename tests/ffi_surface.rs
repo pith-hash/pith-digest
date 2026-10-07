@@ -68,7 +68,7 @@ fn ffi_surface_matches_the_library() {
             ffi::PITH_E_INVALID
         );
         // null data with zero length is the valid empty preimage.
-        let status = unsafe { ffi::pith_digest_sha256(core::ptr::null(), 0, out.as_mut_ptr()) };
+        let status = ffi::pith_digest_sha256(core::ptr::null(), 0, out.as_mut_ptr());
         assert_eq!(status, ffi::PITH_OK);
         assert_eq!(out, *sha256(b"").expect("within size limit").as_bytes());
     }
