@@ -10,10 +10,16 @@ categories = ["algorithms", "cryptography"]
 
 [dependencies]
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["std"]
+std = []
+
 [[bin]]
 name = "gen-reference"
 path = "tools/gen-reference/main.rs"
 
 [lints.rust]
-unsafe_code = "forbid"
 missing_docs = "deny"

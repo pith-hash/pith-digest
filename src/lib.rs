@@ -10,12 +10,14 @@
 //! crate has an empty `[dependencies]` table, enforced by
 //! `scripts/check-zero-deps.py`.
 //!
-//! The crate is `core`-only: no `std`, no allocator, no filesystem,
-//! network, clock or environment. Nothing here makes a result depend on
-//! anything but its arguments, and no code path allocates.
+//! The crate is `core`-only in its library shape: no filesystem,
+//! network, clock or environment, and no code path allocates. The
+//! `std` feature (on by default) links `std` so the `cdylib` the
+//! language SDKs bind through carries a panic handler; the library
+//! surface itself stays `core`-only either way.
 
-#![no_std]
-#![forbid(unsafe_code)]
+#![cfg_attr(not(feature = "std"), no_std)]
+#![deny(unsafe_code)]
 #![deny(missing_docs)]
 
 mod bitreader;
@@ -26,6 +28,8 @@ mod error;
 mod names;
 mod sha256;
 mod splitmix64;
+
+pub mod ffi;
 
 pub use crate::bitreader::BitReader;
 pub use crate::checksums::{adler32, crc32, fnv1a64};

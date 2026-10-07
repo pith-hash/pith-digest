@@ -1,0 +1,34 @@
+{
+  "name": "@pith-hash/pith-digest",
+  "version": "0.1.0",
+  "description": "pith digest SDK: SHA-256, CRC-32, Adler-32, FNV-1a 64 and splitmix64 via the pith-digest Rust cdylib (koffi, prebuilt)",
+  "license": "MIT",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "prebuilds/",
+    "reference.json"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "koffi": "^2.12.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pith-hash/pith-digest.git",
+    "directory": "sdk/node"
+  },
+  "keywords": [
+    "sha256",
+    "crc32",
+    "adler32",
+    "fnv",
+    "splitmix64",
+    "hashing"
+  ]
+}
