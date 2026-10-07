@@ -2,8 +2,18 @@
 name = "pith-digest"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
 description = "pith foundation: digest (zero-dep Rust)"
 readme = "README.md"
 license = "Apache-2.0"
+categories = ["algorithms", "cryptography"]
 
 [dependencies]
+
+[[bin]]
+name = "gen-reference"
+path = "tools/gen-reference/main.rs"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

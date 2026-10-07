@@ -72,7 +72,38 @@ see the release assets or the package registries for the matching version.
 
 ## Quick start
 
-(Add example commands here.)
+Rust:
+
+```rust
+use pith_digest::{Digest, crc32, sha256};
+
+// SHA-256 (FIPS 180-2): fixed-width `Digest<32>`, hex output without
+// allocation — written into a caller-owned buffer.
+let digest = sha256(b"pith").unwrap();
+let mut hex = [0u8; Digest::<32>::HEX_LEN];
+digest.to_hex_into(&mut hex).unwrap();
+assert_eq!(&hex[..], b"158b993c2b8d4c22e5640dc7b2910dd9b4a70cee21eebd82b2eeecc06f7266e6");
+assert_eq!(digest.to_string(), "158b993c2b8d4c22e5640dc7b2910dd9b4a70cee21eebd82b2eeecc06f7266e6");
+
+// Checksums: CRC-32 (PNG/zlib), Adler-32 (RFC 1950), FNV-1a 64.
+assert_eq!(crc32(b"123456789"), 0xCBF4_3926);
+assert_eq!(pith_digest::adler32(b"Wikipedia"), 0x11E6_0398);
+assert_eq!(pith_digest::fnv1a64(b"foobar"), 0x8594_4171_f739_67e8);
+
+// Bit-level fields, MSB-first (the ISO media convention), never panicking.
+let mut reader = pith_digest::BitReader::new(&[0b1010_0110]);
+assert_eq!(reader.bits(3).unwrap(), 0b101);
+assert_eq!(reader.bits(5).unwrap(), 0b0_0110);
+```
+
+The crate is `core`-only (`#![no_std]`): no allocator, no filesystem, no
+environment — every result depends on its arguments alone. The committed
+[`reference.json`](reference.json) carries the hex-exact test vectors;
+regenerate with `cargo run --bin gen-reference -- gen` and verify with
+`cargo run --bin gen-reference -- verify`.
+
+Python / Node / Go SDKs are published from the same cdylib on every release;
+see the release assets or the package registries for the matching version.
 
 ## Contributing
 
