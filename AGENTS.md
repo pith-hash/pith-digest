@@ -4,7 +4,7 @@
 
 - Repo: `pith-hash/pith-digest`
 - Description: pith foundation: digest (zero-dep Rust)
-- License: Apache-2.0
+- License: MIT
 
 ## Build & Test
 

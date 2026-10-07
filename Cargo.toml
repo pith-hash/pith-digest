@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.85"
 description = "pith foundation: digest (zero-dep Rust)"
 readme = "README.md"
-license = "Apache-2.0"
+license = "MIT"
 categories = ["algorithms", "cryptography"]
 
 [dependencies]
