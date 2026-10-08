@@ -206,3 +206,199 @@ func SplitMix64Fill(seed uint64, count int) ([]uint64, error) {
 	}
 	return out, nil
 }
+
+// Sha1 computes the 20-byte SHA-1 digest of data.
+func Sha1(data []byte) ([20]byte, error) {
+	var digest [20]byte
+	libPath, err := locate()
+	if err != nil {
+		return digest, err
+	}
+	status, err := ffiDigest(libPath, "pith_digest_sha1", dataPtr(data), len(data), digest[:])
+	if err != nil {
+		return digest, err
+	}
+	if status != StatusOK {
+		return digest, &FfiError{Op: "pith_digest_sha1", Status: status}
+	}
+	return digest, nil
+}
+
+// Sha512 computes the 64-byte SHA-512 digest of data.
+func Sha512(data []byte) ([64]byte, error) {
+	var digest [64]byte
+	libPath, err := locate()
+	if err != nil {
+		return digest, err
+	}
+	status, err := ffiDigest(libPath, "pith_digest_sha512", dataPtr(data), len(data), digest[:])
+	if err != nil {
+		return digest, err
+	}
+	if status != StatusOK {
+		return digest, &FfiError{Op: "pith_digest_sha512", Status: status}
+	}
+	return digest, nil
+}
+
+// HmacSha1 computes the 20-byte HMAC-SHA-1 of data under key.
+func HmacSha1(key, data []byte) ([20]byte, error) {
+	var mac [20]byte
+	libPath, err := locate()
+	if err != nil {
+		return mac, err
+	}
+	status, err := ffiHmac(libPath, "pith_digest_hmac_sha1", dataPtr(key), len(key), dataPtr(data), len(data), mac[:])
+	if err != nil {
+		return mac, err
+	}
+	if status != StatusOK {
+		return mac, &FfiError{Op: "pith_digest_hmac_sha1", Status: status}
+	}
+	return mac, nil
+}
+
+// HmacSha256 computes the 32-byte HMAC-SHA-256 of data under key.
+func HmacSha256(key, data []byte) ([32]byte, error) {
+	var mac [32]byte
+	libPath, err := locate()
+	if err != nil {
+		return mac, err
+	}
+	status, err := ffiHmac(libPath, "pith_digest_hmac_sha256", dataPtr(key), len(key), dataPtr(data), len(data), mac[:])
+	if err != nil {
+		return mac, err
+	}
+	if status != StatusOK {
+		return mac, &FfiError{Op: "pith_digest_hmac_sha256", Status: status}
+	}
+	return mac, nil
+}
+
+// HmacSha512 computes the 64-byte HMAC-SHA-512 of data under key.
+func HmacSha512(key, data []byte) ([64]byte, error) {
+	var mac [64]byte
+	libPath, err := locate()
+	if err != nil {
+		return mac, err
+	}
+	status, err := ffiHmac(libPath, "pith_digest_hmac_sha512", dataPtr(key), len(key), dataPtr(data), len(data), mac[:])
+	if err != nil {
+		return mac, err
+	}
+	if status != StatusOK {
+		return mac, &FfiError{Op: "pith_digest_hmac_sha512", Status: status}
+	}
+	return mac, nil
+}
+
+// Xxh64 computes the XXH-64 hash of data with seed.
+func Xxh64(data []byte, seed uint64) (uint64, error) {
+	libPath, err := locate()
+	if err != nil {
+		return 0, err
+	}
+	var out uint64
+	status, err := ffiSum64Seed(libPath, "pith_digest_xxh64", dataPtr(data), len(data), seed, &out)
+	if err != nil {
+		return 0, err
+	}
+	if status != StatusOK {
+		return 0, &FfiError{Op: "pith_digest_xxh64", Status: status}
+	}
+	return out, nil
+}
+
+// Murmur3X64_128 computes the 16-byte MurmurHash3 x64 128 digest of
+// data with seed.
+func Murmur3X64_128(data []byte, seed uint32) ([16]byte, error) {
+	var digest [16]byte
+	libPath, err := locate()
+	if err != nil {
+		return digest, err
+	}
+	status, err := ffiSum128(libPath, "pith_digest_murmur3_x64_128", dataPtr(data), len(data), seed, &digest)
+	if err != nil {
+		return digest, err
+	}
+	if status != StatusOK {
+		return digest, &FfiError{Op: "pith_digest_murmur3_x64_128", Status: status}
+	}
+	return digest, nil
+}
+
+// Crc32c computes the CRC-32C (Castagnoli, reflected) of data.
+func Crc32c(data []byte) (uint32, error) {
+	libPath, err := locate()
+	if err != nil {
+		return 0, err
+	}
+	var out uint32
+	status, err := ffiChecksum32(libPath, "pith_digest_crc32c", dataPtr(data), len(data), &out)
+	if err != nil {
+		return 0, err
+	}
+	if status != StatusOK {
+		return 0, &FfiError{Op: "pith_digest_crc32c", Status: status}
+	}
+	return out, nil
+}
+
+// Base64Encode encodes data as standard base64 with padding.
+func Base64Encode(data []byte) ([]byte, error) {
+	libPath, err := locate()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]byte, (len(data)+2)/3*4)
+	var outLen int
+	status, err := ffiBase64(libPath, "pith_digest_base64_encode", dataPtr(data), len(data), out, &outLen)
+	if err != nil {
+		return nil, err
+	}
+	if status != StatusOK {
+		return nil, &FfiError{Op: "pith_digest_base64_encode", Status: status}
+	}
+	return out[:outLen], nil
+}
+
+// Base64Decode decodes a standard base64 string. A non-canonical
+// input is refused with StatusRejected.
+func Base64Decode(data []byte) ([]byte, error) {
+	libPath, err := locate()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]byte, len(data))
+	var outLen int
+	status, err := ffiBase64(libPath, "pith_digest_base64_decode", dataPtr(data), len(data), out, &outLen)
+	if err != nil {
+		return nil, err
+	}
+	if status != StatusOK {
+		return nil, &FfiError{Op: "pith_digest_base64_decode", Status: status}
+	}
+	return out[:outLen], nil
+}
+
+// Xoshiro256Fill produces the first count sequential xoshiro256**
+// outputs of the generator seeded with seed.
+func Xoshiro256Fill(seed uint64, count int) ([]uint64, error) {
+	libPath, err := locate()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]uint64, count)
+	var outPtr *uint64
+	if count > 0 {
+		outPtr = &out[0]
+	}
+	status, err := ffiFill(libPath, "pith_digest_xoshiro256_fill", seed, outPtr, count)
+	if err != nil {
+		return nil, err
+	}
+	if status != StatusOK {
+		return nil, &FfiError{Op: "pith_digest_xoshiro256_fill", Status: status}
+	}
+	return out, nil
+}

@@ -95,3 +95,151 @@ test("matches rust-pinned values", () => {
   );
   assert.equal(hex64(splitmix64Fill(0, 1)[0]), "e220a8397b1dcdaf");
 });
+
+// ---------------------------------------------------------------------------
+// New tier-1 ops: sha1 / sha512 / hmac-* / xxh64 / murmur3_x64_128 /
+// crc32c / base64 / xoshiro256ss, replayed hex-exact like the sections
+// above, plus the PITH_E_INVALID / PITH_E_REJECTED refusals.
+// ---------------------------------------------------------------------------
+
+const {
+  STATUS_INVALID,
+  STATUS_REJECTED,
+  base64Decode,
+  base64Encode,
+  crc32c,
+  hmacSha1,
+  hmacSha256,
+  hmacSha512,
+  loadLibrary,
+  murmur3X64128,
+  sha1,
+  sha512,
+  xxh64,
+  xoshiro256Fill,
+} = require("../index.js");
+
+for (const vector of REFERENCE.sha1) {
+  test(`sha1 vector ${vector.input_hex.slice(0, 16)} is reproduced hex-exact`, () => {
+    assert.equal(sha1(Buffer.from(vector.input_hex, "hex")).toString("hex"), vector.digest);
+  });
+}
+
+for (const vector of REFERENCE.sha512) {
+  test(`sha512 vector ${vector.input_hex.slice(0, 16)} is reproduced hex-exact`, () => {
+    assert.equal(sha512(Buffer.from(vector.input_hex, "hex")).toString("hex"), vector.digest);
+  });
+}
+
+for (const vector of REFERENCE.hmac_sha1) {
+  test(`hmac_sha1 vector ${vector.data_hex.slice(0, 16)} is reproduced hex-exact`, () => {
+    assert.equal(
+      hmacSha1(Buffer.from(vector.key_hex, "hex"), Buffer.from(vector.data_hex, "hex")).toString("hex"),
+      vector.mac,
+    );
+  });
+}
+
+for (const vector of REFERENCE.hmac_sha256) {
+  test(`hmac_sha256 vector ${vector.data_hex.slice(0, 16)} is reproduced hex-exact`, () => {
+    assert.equal(
+      hmacSha256(Buffer.from(vector.key_hex, "hex"), Buffer.from(vector.data_hex, "hex")).toString("hex"),
+      vector.mac,
+    );
+  });
+}
+
+for (const vector of REFERENCE.hmac_sha512) {
+  test(`hmac_sha512 vector ${vector.data_hex.slice(0, 16)} is reproduced hex-exact`, () => {
+    assert.equal(
+      hmacSha512(Buffer.from(vector.key_hex, "hex"), Buffer.from(vector.data_hex, "hex")).toString("hex"),
+      vector.mac,
+    );
+  });
+}
+
+for (const vector of REFERENCE.xxh64) {
+  test(`xxh64 vector ${vector.input_hex.slice(0, 16)} seed ${vector.seed_hex} is reproduced hex-exact`, () => {
+    assert.equal(
+      hex64(xxh64(Buffer.from(vector.input_hex, "hex"), BigInt(`0x${vector.seed_hex}`))),
+      vector.hash,
+    );
+  });
+}
+
+for (const vector of REFERENCE.murmur3_x64_128) {
+  test(`murmur3_x64_128 vector ${vector.input_hex.slice(0, 16)} seed ${vector.seed_hex} is reproduced hex-exact`, () => {
+    assert.equal(
+      murmur3X64128(Buffer.from(vector.input_hex, "hex"), parseInt(vector.seed_hex, 16)).toString("hex"),
+      vector.digest,
+    );
+  });
+}
+
+for (const vector of REFERENCE.crc32c) {
+  test(`crc32c vector ${vector.input_hex.slice(0, 16)} is reproduced hex-exact`, () => {
+    assert.equal(crc32c(Buffer.from(vector.input_hex, "hex")).toString(16).padStart(8, "0"), vector.crc32c);
+  });
+}
+
+for (const vector of REFERENCE.base64) {
+  test(`base64 vector ${vector.input_hex.slice(0, 16)} is reproduced hex-exact`, () => {
+    const data = Buffer.from(vector.input_hex, "hex");
+    const encoded = Buffer.from(vector.encoded_hex, "hex").toString("ascii");
+    assert.equal(base64Encode(data), encoded);
+    assert.deepEqual([...base64Decode(Buffer.from(encoded, "ascii"))], [...data]);
+  });
+}
+
+for (const vector of REFERENCE.xoshiro256ss) {
+  test(`xoshiro256ss seed ${vector.seed_hex} is reproduced hex-exact`, () => {
+    const outputs = xoshiro256Fill(BigInt(`0x${vector.seed_hex}`), vector.outputs.length);
+    assert.deepEqual(outputs.map(hex64), vector.outputs);
+  });
+}
+
+test("null out-slot is refused with PITH_E_INVALID (-1)", () => {
+  // koffi surfaces the int32_t return as a value; the wrappers turn
+  // non-zero statuses into FfiError. At the raw binding level a null
+  // out-slot comes back as the -1 status itself.
+  const { sha1: raw } = loadLibrary();
+  const data = Buffer.from("abc");
+  assert.equal(raw(data, data.length, null), STATUS_INVALID);
+});
+
+test("too-small base64 encode buffer is refused with PITH_E_REJECTED (-2)", () => {
+  const data = Buffer.from("hello");
+  const tiny = Buffer.alloc(4); // canonical size for 5 bytes is 8
+  assert.throws(() => base64Encode(data, tiny), (err) =>
+    err instanceof FfiError && err.status === STATUS_REJECTED);
+});
+
+test("too-small base64 decode buffer is refused with PITH_E_REJECTED (-2)", () => {
+  const encoded = Buffer.from("aGVsbG8=", "ascii");
+  const tiny = Buffer.alloc(2); // decoded size is 5
+  assert.throws(() => base64Decode(encoded, tiny), (err) =>
+    err instanceof FfiError && err.status === STATUS_REJECTED);
+});
+
+test("non-canonical base64 decode is refused with PITH_E_REJECTED (-2)", () => {
+  assert.throws(() => base64Decode(Buffer.from("Zy==", "ascii")), (err) =>
+    err instanceof FfiError && err.status === STATUS_REJECTED);
+});
+
+test("base64 round-trip with explicit buffers of exact capacity succeeds", () => {
+  const data = Buffer.from("hello");
+  const enc = Buffer.alloc(8);
+  assert.equal(base64Encode(data, enc), "aGVsbG8=");
+  assert.deepEqual([...base64Decode(Buffer.from("aGVsbG8=", "ascii"), Buffer.alloc(6))], [...data]);
+});
+
+test("empty-input edge cases for the new ops", () => {
+  assert.equal(sha1(Buffer.alloc(0)).toString("hex"), "da39a3ee5e6b4b0d3255bfef95601890afd80709");
+  assert.equal(
+    sha512(Buffer.alloc(0)).toString("hex"),
+    "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e",
+  );
+  assert.equal(hex64(xxh64(Buffer.alloc(0), 0n)), "ef46db3751d8e999");
+  assert.equal(crc32c(Buffer.alloc(0)), 0);
+  assert.deepEqual(xoshiro256Fill(0, 0), []);
+});

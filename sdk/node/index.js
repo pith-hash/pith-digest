@@ -129,7 +129,79 @@ function loadLibrary() {
     "uint64_t *",
     "size_t",
   ]);
-  cached = { sha256, crc32, adler32, fnv1a64, splitmix64Fill };
+  const sha1 = lib.func("pith_digest_sha1", "int32_t", [
+    "const uint8_t *",
+    "size_t",
+    "uint8_t *",
+  ]);
+  const sha512 = lib.func("pith_digest_sha512", "int32_t", [
+    "const uint8_t *",
+    "size_t",
+    "uint8_t *",
+  ]);
+  const hmacSha1 = lib.func("pith_digest_hmac_sha1", "int32_t", [
+    "const uint8_t *",
+    "size_t",
+    "const uint8_t *",
+    "size_t",
+    "uint8_t *",
+  ]);
+  const hmacSha256 = lib.func("pith_digest_hmac_sha256", "int32_t", [
+    "const uint8_t *",
+    "size_t",
+    "const uint8_t *",
+    "size_t",
+    "uint8_t *",
+  ]);
+  const hmacSha512 = lib.func("pith_digest_hmac_sha512", "int32_t", [
+    "const uint8_t *",
+    "size_t",
+    "const uint8_t *",
+    "size_t",
+    "uint8_t *",
+  ]);
+  const xxh64 = lib.func("pith_digest_xxh64", "int32_t", [
+    "const uint8_t *",
+    "size_t",
+    "uint64_t",
+    koffi.out(koffi.pointer("uint64_t")),
+  ]);
+  const murmur3X64128 = lib.func("pith_digest_murmur3_x64_128", "int32_t", [
+    "const uint8_t *",
+    "size_t",
+    "uint32_t",
+    "uint8_t *",
+  ]);
+  const crc32c = lib.func("pith_digest_crc32c", "int32_t", [
+    "const uint8_t *",
+    "size_t",
+    koffi.out(koffi.pointer("uint32_t")),
+  ]);
+  const base64Encode = lib.func("pith_digest_base64_encode", "int32_t", [
+    "const uint8_t *",
+    "size_t",
+    "uint8_t *",
+    "size_t",
+    koffi.out(koffi.pointer("size_t")),
+  ]);
+  const base64Decode = lib.func("pith_digest_base64_decode", "int32_t", [
+    "const uint8_t *",
+    "size_t",
+    "uint8_t *",
+    "size_t",
+    koffi.out(koffi.pointer("size_t")),
+  ]);
+  const xoshiro256Fill = lib.func("pith_digest_xoshiro256_fill", "int32_t", [
+    "uint64_t",
+    "uint64_t *",
+    "size_t",
+  ]);
+  cached = {
+    sha256, crc32, adler32, fnv1a64, splitmix64Fill,
+    sha1, sha512, hmacSha1, hmacSha256, hmacSha512,
+    xxh64, murmur3X64128, crc32c, base64Encode, base64Decode,
+    xoshiro256Fill,
+  };
   return cached;
 }
 
@@ -245,6 +317,221 @@ function splitmix64Fill(seed, count) {
   return values;
 }
 
+/**
+ * Computes the 20-byte SHA-1 digest of `data`.
+ *
+ * @param {Buffer} data the input bytes
+ * @returns {Buffer} the 20-byte digest
+ * @throws {FfiError} on a non-zero status (a null `data` is -1)
+ */
+function sha1(data) {
+  assertData(data, "sha1");
+  const { sha1: op } = loadLibrary();
+  const out = Buffer.alloc(20);
+  const status = op(data, data.length, out);
+  if (status !== STATUS_OK) {
+    throw new FfiError("pith_digest_sha1", status);
+  }
+  return out;
+}
+
+/**
+ * Computes the 64-byte SHA-512 digest of `data`.
+ *
+ * @param {Buffer} data the input bytes
+ * @returns {Buffer} the 64-byte digest
+ * @throws {FfiError} on a non-zero status (a null `data` is -1)
+ */
+function sha512(data) {
+  assertData(data, "sha512");
+  const { sha512: op } = loadLibrary();
+  const out = Buffer.alloc(64);
+  const status = op(data, data.length, out);
+  if (status !== STATUS_OK) {
+    throw new FfiError("pith_digest_sha512", status);
+  }
+  return out;
+}
+
+/** Shared HMAC wrapper: key and data are both Buffers, out is digest-sized. */
+function hmac(opName, op, key, data, digestLen) {
+  if (!Buffer.isBuffer(key)) {
+    throw new TypeError(`${opName}: key must be a Buffer`);
+  }
+  assertData(data, opName);
+  const out = Buffer.alloc(digestLen);
+  const status = op(key, key.length, data, data.length, out);
+  if (status !== STATUS_OK) {
+    throw new FfiError(opName, status);
+  }
+  return out;
+}
+
+/**
+ * Computes HMAC-SHA-1 of `data` under `key`.
+ *
+ * @param {Buffer} key the HMAC key
+ * @param {Buffer} data the input bytes
+ * @returns {Buffer} the 20-byte MAC
+ * @throws {FfiError} on a non-zero status
+ */
+function hmacSha1(key, data) {
+  return hmac("pith_digest_hmac_sha1", loadLibrary().hmacSha1, key, data, 20);
+}
+
+/**
+ * Computes HMAC-SHA-256 of `data` under `key`.
+ *
+ * @param {Buffer} key the HMAC key
+ * @param {Buffer} data the input bytes
+ * @returns {Buffer} the 32-byte MAC
+ * @throws {FfiError} on a non-zero status
+ */
+function hmacSha256(key, data) {
+  return hmac("pith_digest_hmac_sha256", loadLibrary().hmacSha256, key, data, 32);
+}
+
+/**
+ * Computes HMAC-SHA-512 of `data` under `key`.
+ *
+ * @param {Buffer} key the HMAC key
+ * @param {Buffer} data the input bytes
+ * @returns {Buffer} the 64-byte MAC
+ * @throws {FfiError} on a non-zero status
+ */
+function hmacSha512(key, data) {
+  return hmac("pith_digest_hmac_sha512", loadLibrary().hmacSha512, key, data, 64);
+}
+
+/**
+ * Computes the XXH64 of `data` under `seed`.
+ *
+ * @param {Buffer} data the input bytes
+ * @param {number|bigint} seed the 64-bit seed
+ * @returns {bigint} the hash (format with `hex64`)
+ * @throws {FfiError} on a non-zero status
+ */
+function xxh64(data, seed) {
+  assertData(data, "xxh64");
+  const { xxh64: op } = loadLibrary();
+  const out = [0n];
+  const status = op(data, data.length, BigInt(seed), out);
+  if (status !== STATUS_OK) {
+    throw new FfiError("pith_digest_xxh64", status);
+  }
+  return out[0];
+}
+
+/**
+ * Computes the MurmurHash3 x64 128-bit digest of `data` under `seed`.
+ *
+ * @param {Buffer} data the input bytes
+ * @param {number} seed the 32-bit seed
+ * @returns {Buffer} the 16-byte digest (big-endian hex matches reference.json)
+ * @throws {FfiError} on a non-zero status
+ */
+function murmur3X64128(data, seed) {
+  assertData(data, "murmur3_x64_128");
+  const { murmur3X64128: op } = loadLibrary();
+  const out = Buffer.alloc(16);
+  const status = op(data, data.length, seed >>> 0, out);
+  if (status !== STATUS_OK) {
+    throw new FfiError("pith_digest_murmur3_x64_128", status);
+  }
+  return out;
+}
+
+/**
+ * Computes the CRC-32C (Castagnoli, reflected) of `data`.
+ *
+ * @param {Buffer} data the input bytes
+ * @returns {number} the checksum
+ * @throws {FfiError} on a non-zero status
+ */
+function crc32c(data) {
+  assertData(data, "crc32c");
+  const { crc32c: op } = loadLibrary();
+  const out = [0];
+  const status = op(data, data.length, out);
+  if (status !== STATUS_OK) {
+    throw new FfiError("pith_digest_crc32c", status);
+  }
+  return out[0] >>> 0;
+}
+
+/**
+ * Base64-encodes `data`. With no `out` buffer, allocates the exact
+ * canonical size; with one, its length is the capacity handed to the
+ * cdylib (so a too-small buffer surfaces as PITH_E_REJECTED).
+ *
+ * @param {Buffer} data the input bytes
+ * @param {Buffer} [out] optional destination buffer
+ * @returns {string} the base64 text
+ * @throws {FfiError} on a non-zero status (-2 when `out` is too small)
+ */
+function base64Encode(data, out) {
+  assertData(data, "base64_encode");
+  const { base64Encode: op } = loadLibrary();
+  const dest = out ?? Buffer.alloc(Math.max(1, Math.ceil(data.length / 3) * 4));
+  const outLen = [0];
+  const status = op(data, data.length, dest, dest.length, outLen);
+  if (status !== STATUS_OK) {
+    throw new FfiError("pith_digest_base64_encode", status);
+  }
+  return dest.toString("ascii", 0, outLen[0]);
+}
+
+/**
+ * Decodes canonical base64 `data`. With no `out` buffer, allocates the
+ * maximum decoded size; with one, its length is the capacity handed to
+ * the cdylib (so a too-small buffer surfaces as PITH_E_REJECTED).
+ *
+ * @param {Buffer} data the base64 text bytes
+ * @param {Buffer} [out] optional destination buffer
+ * @returns {Buffer} the decoded bytes
+ * @throws {FfiError} on a non-zero status (-2 for non-canonical input
+ *   or a too-small `out`)
+ */
+function base64Decode(data, out) {
+  assertData(data, "base64_decode");
+  const { base64Decode: op } = loadLibrary();
+  const dest = out ?? Buffer.alloc(Math.max(1, Math.floor(data.length / 4) * 3));
+  const outLen = [0];
+  const status = op(data, data.length, dest, dest.length, outLen);
+  if (status !== STATUS_OK) {
+    throw new FfiError("pith_digest_base64_decode", status);
+  }
+  return dest.subarray(0, outLen[0]);
+}
+
+/**
+ * Produces the first `count` sequential xoshiro256** outputs of the
+ * generator seeded with `seed`.
+ *
+ * @param {number|bigint} seed the generator seed
+ * @param {number} count how many outputs to produce
+ * @returns {bigint[]} the outputs (format each with `hex64`)
+ * @throws {FfiError} on a non-zero status
+ */
+function xoshiro256Fill(seed, count) {
+  if (!Number.isInteger(count) || count < 0) {
+    throw new TypeError("count must be a non-negative integer");
+  }
+  const { xoshiro256Fill: op } = loadLibrary();
+  // The Buffer is passed by reference; the cdylib writes count
+  // little-endian u64s into it.
+  const out = Buffer.alloc(8 * count);
+  const status = op(BigInt(seed), out, count);
+  if (status !== STATUS_OK) {
+    throw new FfiError("pith_digest_xoshiro256_fill", status);
+  }
+  const values = [];
+  for (let i = 0; i < count; i++) {
+    values.push(out.readBigUInt64LE(8 * i));
+  }
+  return values;
+}
+
 module.exports = {
   STATUS_OK,
   STATUS_INVALID,
@@ -252,10 +539,22 @@ module.exports = {
   CDYLIB_NAMES,
   FfiError,
   findCdylib,
+  loadLibrary,
   sha256,
+  sha1,
+  sha512,
+  hmacSha1,
+  hmacSha256,
+  hmacSha512,
   crc32,
+  crc32c,
   adler32,
   fnv1a64,
+  xxh64,
+  murmur3X64128,
+  base64Encode,
+  base64Decode,
   splitmix64Fill,
+  xoshiro256Fill,
   hex64,
 };

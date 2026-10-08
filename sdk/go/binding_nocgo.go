@@ -25,3 +25,27 @@ func ffiChecksum64(string, string, *byte, int, *uint64) (int32, error) {
 func ffiSplitMix64Fill(string, uint64, *uint64, int) (int32, error) {
 	return 0, fmt.Errorf("pithdigest: cgo is required to load the cdylib on this platform (build with CGO_ENABLED=1)")
 }
+
+func ffiDigest(string, string, *byte, int, []byte) (int32, error) {
+	return 0, fmt.Errorf("pithdigest: cgo is required to load the cdylib on this platform (build with CGO_ENABLED=1)")
+}
+
+func ffiHmac(string, string, *byte, int, *byte, int, []byte) (int32, error) {
+	return 0, fmt.Errorf("pithdigest: cgo is required to load the cdylib on this platform (build with CGO_ENABLED=1)")
+}
+
+func ffiSum64Seed(string, string, *byte, int, uint64, *uint64) (int32, error) {
+	return 0, fmt.Errorf("pithdigest: cgo is required to load the cdylib on this platform (build with CGO_ENABLED=1)")
+}
+
+func ffiSum128(string, string, *byte, int, uint32, *[16]byte) (int32, error) {
+	return 0, fmt.Errorf("pithdigest: cgo is required to load the cdylib on this platform (build with CGO_ENABLED=1)")
+}
+
+func ffiBase64(string, string, *byte, int, []byte, *int) (int32, error) {
+	return 0, fmt.Errorf("pithdigest: cgo is required to load the cdylib on this platform (build with CGO_ENABLED=1)")
+}
+
+func ffiFill(string, string, uint64, *uint64, int) (int32, error) {
+	return 0, fmt.Errorf("pithdigest: cgo is required to load the cdylib on this platform (build with CGO_ENABLED=1)")
+}

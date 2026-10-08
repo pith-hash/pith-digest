@@ -18,6 +18,7 @@
 
 #![allow(unsafe_code)]
 
+use crate::error::Result;
 use crate::{SplitMix64, adler32, crc32, fnv1a64, sha256};
 
 /// Borrows `data` as a byte slice; a null pointer (only legal with the
@@ -46,10 +47,11 @@ pub const PITH_OK: i32 = 0;
 /// data pointer that claims a nonzero length.
 pub const PITH_E_INVALID: i32 = -1;
 /// Status: the core primitive refused the input. With `pith-digest`
-/// this is only reachable for a SHA-256 input beyond the padding
+/// this is reachable for a SHA-256/SHA-1 input beyond the padding
 /// format's length ceiling — unreachable for any buffer a real caller
-/// can pass — but the code exists so a foreign caller never has to
-/// reason about a panic.
+/// can pass — and for the base64 pair (an output buffer smaller than
+/// the operation needs, or a non-canonical decode input), but the
+/// code exists so a foreign caller never has to reason about a panic.
 pub const PITH_E_REJECTED: i32 = -2;
 
 /// The SHA-256 digest of `data`, written as 32 raw bytes through `out`.
@@ -155,6 +157,306 @@ pub unsafe extern "C" fn pith_digest_splitmix64_fill(
     }
     let slots = borrow_mut(out, count);
     let mut rng = SplitMix64::new(seed);
+    for slot in slots {
+        *slot = rng.next_u64();
+    }
+    PITH_OK
+}
+
+/// The mutable byte-buffer counterpart of [`borrow`] for sized
+/// out-buffers (the base64 pair).
+fn borrow_mut_bytes<'a>(out: *mut u8, cap: usize) -> &'a mut [u8] {
+    if out.is_null() {
+        &mut []
+    } else {
+        unsafe { core::slice::from_raw_parts_mut(out, cap) }
+    }
+}
+
+/// The SHA-1 digest of `data`, written as 20 raw bytes through `out`.
+///
+/// # Safety
+///
+/// `data` must point to `len` readable bytes and `out` to 20 writable
+/// bytes; both must stay valid for the duration of the call. The
+/// function retains nothing.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pith_digest_sha1(data: *const u8, len: usize, out: *mut u8) -> i32 {
+    if out.is_null() || (data.is_null() && len > 0) {
+        return PITH_E_INVALID;
+    }
+    let bytes = borrow(data, len);
+    match crate::sha1(bytes) {
+        Ok(digest) => {
+            unsafe { core::ptr::copy_nonoverlapping(digest.as_bytes().as_ptr(), out, 20) };
+            PITH_OK
+        }
+        Err(_) => PITH_E_REJECTED,
+    }
+}
+
+/// The SHA-512 digest of `data`, written as 64 raw bytes through
+/// `out`.
+///
+/// # Safety
+///
+/// `data` must point to `len` readable bytes and `out` to 64 writable
+/// bytes; both must stay valid for the duration of the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pith_digest_sha512(data: *const u8, len: usize, out: *mut u8) -> i32 {
+    if out.is_null() || (data.is_null() && len > 0) {
+        return PITH_E_INVALID;
+    }
+    let bytes = borrow(data, len);
+    let digest = crate::sha512(bytes);
+    unsafe { core::ptr::copy_nonoverlapping(digest.as_bytes().as_ptr(), out, 64) };
+    PITH_OK
+}
+
+/// The HMAC-SHA-1 of `data` under `key`, written as 20 raw bytes
+/// through `out`.
+///
+/// # Safety
+///
+/// `key` must point to `key_len` readable bytes, `data` to `len`
+/// readable bytes and `out` to 20 writable bytes; all must stay valid
+/// for the duration of the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pith_digest_hmac_sha1(
+    key: *const u8,
+    key_len: usize,
+    data: *const u8,
+    len: usize,
+    out: *mut u8,
+) -> i32 {
+    unsafe {
+        hmac_export(key, key_len, data, len, out, |k, d| {
+            crate::hmac_sha1(k, d).map(|digest| *digest.as_bytes())
+        })
+    }
+}
+
+/// The HMAC-SHA-256 of `data` under `key`, written as 32 raw bytes
+/// through `out`.
+///
+/// # Safety
+///
+/// `key` must point to `key_len` readable bytes, `data` to `len`
+/// readable bytes and `out` to 32 writable bytes; all must stay valid
+/// for the duration of the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pith_digest_hmac_sha256(
+    key: *const u8,
+    key_len: usize,
+    data: *const u8,
+    len: usize,
+    out: *mut u8,
+) -> i32 {
+    unsafe {
+        hmac_export(key, key_len, data, len, out, |k, d| {
+            crate::hmac_sha256(k, d).map(|digest| *digest.as_bytes())
+        })
+    }
+}
+
+/// The HMAC-SHA-512 of `data` under `key`, written as 64 raw bytes
+/// through `out`.
+///
+/// # Safety
+///
+/// `key` must point to `key_len` readable bytes, `data` to `len`
+/// readable bytes and `out` to 64 writable bytes; all must stay valid
+/// for the duration of the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pith_digest_hmac_sha512(
+    key: *const u8,
+    key_len: usize,
+    data: *const u8,
+    len: usize,
+    out: *mut u8,
+) -> i32 {
+    unsafe {
+        hmac_export(key, key_len, data, len, out, |k, d| {
+            Ok(*crate::hmac_sha512(k, d).as_bytes())
+        })
+    }
+}
+
+/// The shared body of the three HMAC exports: validates the pointers,
+/// runs `hmac`, copies the `N`-byte digest.
+///
+/// # Safety
+///
+/// The caller has already validated every pointer's writability
+/// contract; this helper only centralizes the null checks and the
+/// copy.
+unsafe fn hmac_export<const N: usize>(
+    key: *const u8,
+    key_len: usize,
+    data: *const u8,
+    len: usize,
+    out: *mut u8,
+    hmac: impl FnOnce(&[u8], &[u8]) -> Result<[u8; N]>,
+) -> i32 {
+    if out.is_null() || (key.is_null() && key_len > 0) || (data.is_null() && len > 0) {
+        return PITH_E_INVALID;
+    }
+    let key_bytes = borrow(key, key_len);
+    let data_bytes = borrow(data, len);
+    match hmac(key_bytes, data_bytes) {
+        Ok(digest) => {
+            unsafe { core::ptr::copy_nonoverlapping(digest.as_ptr(), out, N) };
+            PITH_OK
+        }
+        Err(_) => PITH_E_REJECTED,
+    }
+}
+
+/// The XXH64 hash of `data` under `seed`, written through `out`.
+///
+/// # Safety
+///
+/// `data` must point to `len` readable bytes and `out` to one writable
+/// `u64`; both must stay valid for the duration of the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pith_digest_xxh64(
+    data: *const u8,
+    len: usize,
+    seed: u64,
+    out: *mut u64,
+) -> i32 {
+    if out.is_null() || (data.is_null() && len > 0) {
+        return PITH_E_INVALID;
+    }
+    let bytes = borrow(data, len);
+    unsafe { *out = crate::xxh64(bytes, seed) };
+    PITH_OK
+}
+
+/// The MurmurHash3 x64 128-bit digest of `data` under `seed`, written
+/// as 16 raw bytes (h1 little-endian, then h2 little-endian) through
+/// `out`.
+///
+/// # Safety
+///
+/// `data` must point to `len` readable bytes and `out` to 16 writable
+/// bytes; both must stay valid for the duration of the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pith_digest_murmur3_x64_128(
+    data: *const u8,
+    len: usize,
+    seed: u32,
+    out: *mut u8,
+) -> i32 {
+    if out.is_null() || (data.is_null() && len > 0) {
+        return PITH_E_INVALID;
+    }
+    let bytes = borrow(data, len);
+    let digest = crate::murmur3_x64_128(bytes, seed);
+    unsafe { core::ptr::copy_nonoverlapping(digest.as_bytes().as_ptr(), out, 16) };
+    PITH_OK
+}
+
+/// The CRC-32C (Castagnoli, RFC 3720 B.4) of `data`, written through
+/// `out`.
+///
+/// # Safety
+///
+/// `data` must point to `len` readable bytes and `out` to one writable
+/// `u32`; both must stay valid for the duration of the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pith_digest_crc32c(data: *const u8, len: usize, out: *mut u32) -> i32 {
+    if out.is_null() || (data.is_null() && len > 0) {
+        return PITH_E_INVALID;
+    }
+    let bytes = borrow(data, len);
+    unsafe { *out = crate::crc32c(bytes) };
+    PITH_OK
+}
+
+/// Encodes `data` as canonical padded base64 into `out`, writing the
+/// encoded length through `out_len` (RFC 4648 §4).
+///
+/// # Safety
+///
+/// `data` must point to `len` readable bytes, `out` to `cap` writable
+/// bytes and `out_len` to one writable `usize`; all must stay valid
+/// for the duration of the call. [`PITH_E_REJECTED`] means `cap` is
+/// below [`crate::base64::encoded_len`]`(len)` and nothing was
+/// written.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pith_digest_base64_encode(
+    data: *const u8,
+    len: usize,
+    out: *mut u8,
+    cap: usize,
+    out_len: *mut usize,
+) -> i32 {
+    if out_len.is_null() || out.is_null() || (data.is_null() && len > 0) {
+        return PITH_E_INVALID;
+    }
+    let bytes = borrow(data, len);
+    let buffer = borrow_mut_bytes(out, cap);
+    match crate::base64::base64_encode(bytes, buffer) {
+        Ok(()) => {
+            unsafe { *out_len = crate::base64::encoded_len(len) };
+            PITH_OK
+        }
+        Err(_) => PITH_E_REJECTED,
+    }
+}
+
+/// Decodes canonical padded base64 from `data` into `out`, writing
+/// the decoded length through `out_len` (RFC 4648 §4).
+///
+/// # Safety
+///
+/// `data` must point to `len` readable bytes, `out` to `cap` writable
+/// bytes and `out_len` to one writable `usize`; all must stay valid
+/// for the duration of the call. [`PITH_E_REJECTED`] means `cap` is
+/// below `len / 4 * 3` or the input is not canonical base64; nothing
+/// was written.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pith_digest_base64_decode(
+    data: *const u8,
+    len: usize,
+    out: *mut u8,
+    cap: usize,
+    out_len: *mut usize,
+) -> i32 {
+    if out_len.is_null() || out.is_null() || (data.is_null() && len > 0) {
+        return PITH_E_INVALID;
+    }
+    let bytes = borrow(data, len);
+    let buffer = borrow_mut_bytes(out, cap);
+    match crate::base64::base64_decode(bytes, buffer) {
+        Ok(written) => {
+            unsafe { *out_len = written };
+            PITH_OK
+        }
+        Err(_) => PITH_E_REJECTED,
+    }
+}
+
+/// Fills `out` with the first `count` sequential xoshiro256** outputs
+/// of a generator seeded with `seed` (the splitmix64 expansion the
+/// reference implementation recommends).
+///
+/// # Safety
+///
+/// `out` must point to `count` writable `u64`s and stay valid for the
+/// duration of the call. `count` may be zero (a no-op).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pith_digest_xoshiro256_fill(
+    seed: u64,
+    out: *mut u64,
+    count: usize,
+) -> i32 {
+    if out.is_null() && count > 0 {
+        return PITH_E_INVALID;
+    }
+    let slots = borrow_mut(out, count);
+    let mut rng = crate::Xoshiro256StarStar::from_seed(seed);
     for slot in slots {
         *slot = rng.next_u64();
     }

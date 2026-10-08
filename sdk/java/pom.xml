@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>io.github.pith-hash</groupId>
+  <artifactId>pith-digest</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+
+  <name>pith-digest</name>
+  <description>Java JNI bindings for the pith-digest cdylib: digests, checksums, HMACs, 64-bit hashes, RNG fills and base64 (hex-exact vs reference.json)</description>
+  <url>https://pith-digest.n24q02m.com</url>
+
+  <licenses>
+    <license>
+      <name>MIT</name>
+      <url>https://github.com/pith-hash/pith-digest/blob/main/LICENSE</url>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>pith-hash</id>
+      <name>pith-hash</name>
+      <url>https://github.com/pith-hash</url>
+    </developer>
+  </developers>
+
+  <scm>
+    <url>https://github.com/pith-hash/pith-digest</url>
+    <connection>scm:git:git://github.com/pith-hash/pith-digest.git</connection>
+  </scm>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>11</maven.compiler.release>
+    <junit.version>5.10.2</junit.version>
+    <jackson.version>2.17.2</jackson.version>
+    <surefire.version>3.2.5</surefire.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>${jackson.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>${surefire.version}</version>
+      </plugin>
+    </plugins>
+  </build>
+</project>

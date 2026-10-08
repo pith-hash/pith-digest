@@ -7,7 +7,7 @@
 use crate::error::Result;
 
 /// The SHA-256 initial hash values (FIPS 180-2 5.3.3).
-const H0: [u32; 8] = [
+pub(crate) const H0: [u32; 8] = [
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
 ];
 
@@ -40,24 +40,8 @@ pub fn sha256(data: &[u8]) -> Result<crate::Digest<32>> {
     }
 
     let mut h = H0;
-    let mut chunks = data.chunks_exact(64);
-    for block in chunks.by_ref() {
-        compress(&mut h, block.try_into().expect("chunks_exact yields 64"));
-    }
-
-    // Padding: 0x80, zeros, then the 64-bit big-endian bit length, filling
-    // one final block. A message that leaves fewer than 9 bytes takes a
-    // second block, which the loop over full empty blocks handles naturally.
-    let rem = chunks.remainder();
-    let bit_len = (data.len() as u64) << 3;
-    let mut tail = [0u8; 128];
-    tail[..rem.len()].copy_from_slice(rem);
-    tail[rem.len()] = 0x80;
-    let pad_len = if rem.len() + 9 <= 64 { 64 } else { 128 };
-    tail[pad_len - 8..pad_len].copy_from_slice(&bit_len.to_be_bytes());
-    for block in tail[..pad_len].chunks_exact(64) {
-        compress(&mut h, block.try_into().expect("chunks_exact yields 64"));
-    }
+    let rem = absorb(&mut h, data);
+    let h = finish(&h, rem, data.len() as u64);
 
     let mut out = [0u8; 32];
     for (word, chunk) in h.iter().zip(out.chunks_exact_mut(4)) {
@@ -66,8 +50,43 @@ pub fn sha256(data: &[u8]) -> Result<crate::Digest<32>> {
     Ok(crate::Digest::from_bytes(out))
 }
 
+/// Absorbs `data`'s full 64-byte blocks into `h`, returning the
+/// sub-block remainder (0..64 bytes) that [`finish`] pads.
+///
+/// Shared with SHA-1 (the same 64-byte block shape and padding); the
+/// slice boundary between calls must fall on a block edge, which the
+/// callers guarantee by always absorbing from a block-aligned state.
+pub(crate) fn absorb<'a>(h: &mut [u32; 8], data: &'a [u8]) -> &'a [u8] {
+    let mut chunks = data.chunks_exact(64);
+    for block in chunks.by_ref() {
+        compress(h, block.try_into().expect("chunks_exact yields 64"));
+    }
+    chunks.remainder()
+}
+
+/// Pads the `rem` tail (0x80, zeros, the 64-bit big-endian bit length
+/// of the whole `total_len`-byte message) into one or two final
+/// blocks, compresses them and returns the finalized state.
+///
+/// Shared with SHA-1. A remainder that leaves fewer than 9 bytes takes
+/// a second block, which the loop over full empty blocks handles
+/// naturally.
+pub(crate) fn finish(h: &[u32; 8], rem: &[u8], total_len: u64) -> [u32; 8] {
+    let mut h = *h;
+    let bit_len = total_len << 3;
+    let mut tail = [0u8; 128];
+    tail[..rem.len()].copy_from_slice(rem);
+    tail[rem.len()] = 0x80;
+    let pad_len = if rem.len() + 9 <= 64 { 64 } else { 128 };
+    tail[pad_len - 8..pad_len].copy_from_slice(&bit_len.to_be_bytes());
+    for block in tail[..pad_len].chunks_exact(64) {
+        compress(&mut h, block.try_into().expect("chunks_exact yields 64"));
+    }
+    h
+}
+
 /// One compression step: 64 rounds over the message schedule for `block`.
-fn compress(h: &mut [u32; 8], block: &[u8; 64]) {
+pub(crate) fn compress(h: &mut [u32; 8], block: &[u8; 64]) {
     let mut w = [0u32; 64];
     for (word, chunk) in w.iter_mut().zip(block.chunks_exact(4)) {
         *word = u32::from_be_bytes(chunk.try_into().expect("chunks_exact yields 4"));

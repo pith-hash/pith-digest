@@ -35,6 +35,17 @@ __all__ = [
     "LibraryNotFoundError",
     "find_cdylib",
     "sha256",
+    "sha1",
+    "sha512",
+    "hmac_sha1",
+    "hmac_sha256",
+    "hmac_sha512",
+    "xxh64",
+    "murmur3_x64_128",
+    "crc32c",
+    "base64_encode",
+    "base64_decode",
+    "xoshiro256_fill",
     "crc32",
     "adler32",
     "fnv1a64",
@@ -135,6 +146,67 @@ def _load() -> ctypes.CDLL:
             ctypes.c_size_t,
         ]
         lib.pith_digest_splitmix64_fill.restype = ctypes.c_int32
+        for name, out_len in (
+            ("pith_digest_sha1", 20),
+            ("pith_digest_sha512", 64),
+        ):
+            fn = getattr(lib, name)
+            fn.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_size_t,
+                ctypes.c_char_p,  # out_len-byte out slot
+            ]
+            fn.restype = ctypes.c_int32
+        for name, out_len in (
+            ("pith_digest_hmac_sha1", 20),
+            ("pith_digest_hmac_sha256", 32),
+            ("pith_digest_hmac_sha512", 64),
+        ):
+            fn = getattr(lib, name)
+            fn.argtypes = [
+                ctypes.c_void_p,  # key
+                ctypes.c_size_t,
+                ctypes.c_void_p,  # data
+                ctypes.c_size_t,
+                ctypes.c_char_p,  # out_len-byte out slot
+            ]
+            fn.restype = ctypes.c_int32
+        lib.pith_digest_xxh64.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+            ctypes.c_uint64,
+            ctypes.POINTER(ctypes.c_uint64),
+        ]
+        lib.pith_digest_xxh64.restype = ctypes.c_int32
+        lib.pith_digest_murmur3_x64_128.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+            ctypes.c_uint32,
+            ctypes.c_char_p,  # 16-byte out slot
+        ]
+        lib.pith_digest_murmur3_x64_128.restype = ctypes.c_int32
+        lib.pith_digest_crc32c.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
+        lib.pith_digest_crc32c.restype = ctypes.c_int32
+        for name in ("pith_digest_base64_encode", "pith_digest_base64_decode"):
+            fn = getattr(lib, name)
+            fn.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_size_t,
+                ctypes.c_char_p,  # caller-provided out buffer
+                ctypes.c_size_t,  # capacity
+                ctypes.POINTER(ctypes.c_size_t),  # written length
+            ]
+            fn.restype = ctypes.c_int32
+        lib.pith_digest_xoshiro256_fill.argtypes = [
+            ctypes.c_uint64,
+            ctypes.POINTER(ctypes.c_uint64),
+            ctypes.c_size_t,
+        ]
+        lib.pith_digest_xoshiro256_fill.restype = ctypes.c_int32
         _lib = lib
     return _lib
 
@@ -179,4 +251,107 @@ def splitmix64_fill(seed: int, count: int) -> list[int]:
     status = _load().pith_digest_splitmix64_fill(seed, out, count)
     if status != STATUS_OK:
         raise FfiError("pith_digest_splitmix64_fill", status)
+    return list(out)
+
+
+def _digest_op(fn: ctypes._FuncType, data: bytes, size: int, op: str) -> bytes:
+    out = (ctypes.c_char * size)()
+    status = fn(data, len(data), out)
+    if status != STATUS_OK:
+        raise FfiError(op, status)
+    return bytes(out)
+
+
+def sha1(data: bytes) -> bytes:
+    """The 20-byte SHA-1 digest of ``data``."""
+    return _digest_op(_load().pith_digest_sha1, data, 20, "pith_digest_sha1")
+
+
+def sha512(data: bytes) -> bytes:
+    """The 64-byte SHA-512 digest of ``data``."""
+    return _digest_op(_load().pith_digest_sha512, data, 64, "pith_digest_sha512")
+
+
+def _hmac_op(fn: ctypes._FuncType, key: bytes, data: bytes, size: int, op: str) -> bytes:
+    out = (ctypes.c_char * size)()
+    status = fn(key, len(key), data, len(data), out)
+    if status != STATUS_OK:
+        raise FfiError(op, status)
+    return bytes(out)
+
+
+def hmac_sha1(key: bytes, data: bytes) -> bytes:
+    """The 20-byte HMAC-SHA-1 of ``data`` under ``key``."""
+    return _hmac_op(_load().pith_digest_hmac_sha1, key, data, 20, "pith_digest_hmac_sha1")
+
+
+def hmac_sha256(key: bytes, data: bytes) -> bytes:
+    """The 32-byte HMAC-SHA-256 of ``data`` under ``key``."""
+    return _hmac_op(_load().pith_digest_hmac_sha256, key, data, 32, "pith_digest_hmac_sha256")
+
+
+def hmac_sha512(key: bytes, data: bytes) -> bytes:
+    """The 64-byte HMAC-SHA-512 of ``data`` under ``key``."""
+    return _hmac_op(_load().pith_digest_hmac_sha512, key, data, 64, "pith_digest_hmac_sha512")
+
+
+def xxh64(data: bytes, seed: int = 0) -> int:
+    """The XXH-64 of ``data`` under ``seed``."""
+    out = ctypes.c_uint64()
+    status = _load().pith_digest_xxh64(data, len(data), seed, ctypes.byref(out))
+    if status != STATUS_OK:
+        raise FfiError("pith_digest_xxh64", status)
+    return out.value
+
+
+def murmur3_x64_128(data: bytes, seed: int = 0) -> bytes:
+    """The 16-byte MurmurHash3 x64 128 of ``data``."""
+    out = (ctypes.c_char * 16)()
+    status = _load().pith_digest_murmur3_x64_128(data, len(data), seed, out)
+    if status != STATUS_OK:
+        raise FfiError("pith_digest_murmur3_x64_128", status)
+    return bytes(out)
+
+
+def crc32c(data: bytes) -> int:
+    """The CRC-32C (Castagnoli, reflected) of ``data``."""
+    return _bytes_op(_load().pith_digest_crc32c, data, ctypes.c_uint32(), "pith_digest_crc32c")
+
+
+def _base64_op(
+    fn: ctypes._FuncType, data: bytes, capacity: int, op: str
+) -> tuple[bytes, int]:
+    out = (ctypes.c_char * capacity)()
+    out_len = ctypes.c_size_t(0)
+    status = fn(data, len(data), out, capacity, ctypes.byref(out_len))
+    if status != STATUS_OK:
+        raise FfiError(op, status)
+    return out.raw[: out_len.value], out_len.value
+
+
+def base64_encode(data: bytes) -> bytes:
+    """The canonical standard-alphabet Base64 encoding of ``data``."""
+    capacity = 4 * ((len(data) + 2) // 3) + 1  # payload + NUL terminator
+    return _base64_op(_load().pith_digest_base64_encode, data, capacity, "pith_digest_base64_encode")[0]
+
+
+def base64_decode(data: bytes) -> bytes:
+    """The canonical standard-alphabet Base64 decoding of ``data``.
+
+    Non-canonical input (wrong padding, stray characters) raises
+    :class:`FfiError` with :data:`STATUS_REJECTED`.
+    """
+    capacity = 3 * ((len(data) + 3) // 4) + 1
+    return _base64_op(_load().pith_digest_base64_decode, data, capacity, "pith_digest_base64_decode")[0]
+
+
+def xoshiro256_fill(seed: int, count: int) -> list[int]:
+    """The first ``count`` sequential xoshiro256** outputs of the
+    generator seeded with ``seed``."""
+    if count < 0:
+        raise ValueError("count must not be negative")
+    out = (ctypes.c_uint64 * count)()
+    status = _load().pith_digest_xoshiro256_fill(seed, out, count)
+    if status != STATUS_OK:
+        raise FfiError("pith_digest_xoshiro256_fill", status)
     return list(out)
