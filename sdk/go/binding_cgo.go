@@ -7,6 +7,7 @@ package pithdigest
 
 /*
 #include <dlfcn.h>
+#include <stdlib.h>
 #include <stddef.h>
 #include <stdint.h>
 
