@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pith-digest"
-version = "0.1.0"
+version = "0.1.1-beta.1"
 description = "pith digest SDK: SHA-256, CRC-32, Adler-32, FNV-1a 64 and splitmix64 via the pith-digest Rust cdylib (ctypes, zero-dep)"
 license = "MIT"
 requires-python = ">=3.9"

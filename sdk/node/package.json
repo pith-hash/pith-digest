@@ -1,6 +1,6 @@
 {
   "name": "@pith-hash/pith-digest",
-  "version": "0.1.0",
+  "version": "0.1.1-beta.1",
   "description": "pith digest SDK: SHA-256, CRC-32, Adler-32, FNV-1a 64 and splitmix64 via the pith-digest Rust cdylib (koffi, prebuilt)",
   "license": "MIT",
   "main": "index.js",
