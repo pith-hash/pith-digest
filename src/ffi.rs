@@ -61,7 +61,11 @@ pub const PITH_E_REJECTED: i32 = -2;
 /// `data` must point to `len` readable bytes and `out` to 32 writable
 /// bytes; both must stay valid for the duration of the call. The
 /// function retains nothing.
-#[unsafe(no_mangle)]
+// Every export in this module is `no_mangle` outside `cfg(test)` only. Built twice
+// (unit-test binary and shipped library) one `no_mangle` symbol gets two coverage
+// hashes, and `llvm-cov` keeps whichever copy it reads first, so the coverage gate
+// would depend on object order. A unit-test build keeps the normal mangled names.
+#[cfg_attr(not(test), unsafe(no_mangle))]
 pub unsafe extern "C" fn pith_digest_sha256(data: *const u8, len: usize, out: *mut u8) -> i32 {
     // A null `data` with `len == 0` is a valid empty preimage; only a
     // null out-slot, or a null data pointer that claims length, is a
@@ -85,7 +89,7 @@ pub unsafe extern "C" fn pith_digest_sha256(data: *const u8, len: usize, out: *m
 ///
 /// `data` must point to `len` readable bytes and `out` to one writable
 /// `u32`; both must stay valid for the duration of the call.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(test), unsafe(no_mangle))]
 pub unsafe extern "C" fn pith_digest_crc32(data: *const u8, len: usize, out: *mut u32) -> i32 {
     // A null `data` with `len == 0` is a valid empty preimage; only a
     // null out-slot, or a null data pointer that claims length, is a
@@ -104,7 +108,7 @@ pub unsafe extern "C" fn pith_digest_crc32(data: *const u8, len: usize, out: *mu
 ///
 /// `data` must point to `len` readable bytes and `out` to one writable
 /// `u32`; both must stay valid for the duration of the call.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(test), unsafe(no_mangle))]
 pub unsafe extern "C" fn pith_digest_adler32(data: *const u8, len: usize, out: *mut u32) -> i32 {
     // A null `data` with `len == 0` is a valid empty preimage; only a
     // null out-slot, or a null data pointer that claims length, is a
@@ -123,7 +127,7 @@ pub unsafe extern "C" fn pith_digest_adler32(data: *const u8, len: usize, out: *
 ///
 /// `data` must point to `len` readable bytes and `out` to one writable
 /// `u64`; both must stay valid for the duration of the call.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(test), unsafe(no_mangle))]
 pub unsafe extern "C" fn pith_digest_fnv1a64(data: *const u8, len: usize, out: *mut u64) -> i32 {
     // A null `data` with `len == 0` is a valid empty preimage; only a
     // null out-slot, or a null data pointer that claims length, is a
@@ -145,7 +149,7 @@ pub unsafe extern "C" fn pith_digest_fnv1a64(data: *const u8, len: usize, out: *
 ///
 /// `out` must point to `count` writable `u64`s and stay valid for the
 /// duration of the call. `count` may be zero (a no-op).
-#[unsafe(no_mangle)]
+#[cfg_attr(not(test), unsafe(no_mangle))]
 pub unsafe extern "C" fn pith_digest_splitmix64_fill(
     seed: u64,
     out: *mut u64,
@@ -180,7 +184,7 @@ fn borrow_mut_bytes<'a>(out: *mut u8, cap: usize) -> &'a mut [u8] {
 /// `data` must point to `len` readable bytes and `out` to 20 writable
 /// bytes; both must stay valid for the duration of the call. The
 /// function retains nothing.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(test), unsafe(no_mangle))]
 pub unsafe extern "C" fn pith_digest_sha1(data: *const u8, len: usize, out: *mut u8) -> i32 {
     if out.is_null() || (data.is_null() && len > 0) {
         return PITH_E_INVALID;
@@ -202,7 +206,7 @@ pub unsafe extern "C" fn pith_digest_sha1(data: *const u8, len: usize, out: *mut
 ///
 /// `data` must point to `len` readable bytes and `out` to 64 writable
 /// bytes; both must stay valid for the duration of the call.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(test), unsafe(no_mangle))]
 pub unsafe extern "C" fn pith_digest_sha512(data: *const u8, len: usize, out: *mut u8) -> i32 {
     if out.is_null() || (data.is_null() && len > 0) {
         return PITH_E_INVALID;
@@ -221,7 +225,7 @@ pub unsafe extern "C" fn pith_digest_sha512(data: *const u8, len: usize, out: *m
 /// `key` must point to `key_len` readable bytes, `data` to `len`
 /// readable bytes and `out` to 20 writable bytes; all must stay valid
 /// for the duration of the call.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(test), unsafe(no_mangle))]
 pub unsafe extern "C" fn pith_digest_hmac_sha1(
     key: *const u8,
     key_len: usize,
@@ -244,7 +248,7 @@ pub unsafe extern "C" fn pith_digest_hmac_sha1(
 /// `key` must point to `key_len` readable bytes, `data` to `len`
 /// readable bytes and `out` to 32 writable bytes; all must stay valid
 /// for the duration of the call.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(test), unsafe(no_mangle))]
 pub unsafe extern "C" fn pith_digest_hmac_sha256(
     key: *const u8,
     key_len: usize,
@@ -267,7 +271,7 @@ pub unsafe extern "C" fn pith_digest_hmac_sha256(
 /// `key` must point to `key_len` readable bytes, `data` to `len`
 /// readable bytes and `out` to 64 writable bytes; all must stay valid
 /// for the duration of the call.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(test), unsafe(no_mangle))]
 pub unsafe extern "C" fn pith_digest_hmac_sha512(
     key: *const u8,
     key_len: usize,
@@ -318,7 +322,7 @@ unsafe fn hmac_export<const N: usize>(
 ///
 /// `data` must point to `len` readable bytes and `out` to one writable
 /// `u64`; both must stay valid for the duration of the call.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(test), unsafe(no_mangle))]
 pub unsafe extern "C" fn pith_digest_xxh64(
     data: *const u8,
     len: usize,
@@ -341,7 +345,7 @@ pub unsafe extern "C" fn pith_digest_xxh64(
 ///
 /// `data` must point to `len` readable bytes and `out` to 16 writable
 /// bytes; both must stay valid for the duration of the call.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(test), unsafe(no_mangle))]
 pub unsafe extern "C" fn pith_digest_murmur3_x64_128(
     data: *const u8,
     len: usize,
@@ -364,7 +368,7 @@ pub unsafe extern "C" fn pith_digest_murmur3_x64_128(
 ///
 /// `data` must point to `len` readable bytes and `out` to one writable
 /// `u32`; both must stay valid for the duration of the call.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(test), unsafe(no_mangle))]
 pub unsafe extern "C" fn pith_digest_crc32c(data: *const u8, len: usize, out: *mut u32) -> i32 {
     if out.is_null() || (data.is_null() && len > 0) {
         return PITH_E_INVALID;
@@ -384,7 +388,7 @@ pub unsafe extern "C" fn pith_digest_crc32c(data: *const u8, len: usize, out: *m
 /// for the duration of the call. [`PITH_E_REJECTED`] means `cap` is
 /// below [`crate::base64::encoded_len`]`(len)` and nothing was
 /// written.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(test), unsafe(no_mangle))]
 pub unsafe extern "C" fn pith_digest_base64_encode(
     data: *const u8,
     len: usize,
@@ -416,7 +420,7 @@ pub unsafe extern "C" fn pith_digest_base64_encode(
 /// for the duration of the call. [`PITH_E_REJECTED`] means `cap` is
 /// below `len / 4 * 3` or the input is not canonical base64; nothing
 /// was written.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(test), unsafe(no_mangle))]
 pub unsafe extern "C" fn pith_digest_base64_decode(
     data: *const u8,
     len: usize,
@@ -446,7 +450,7 @@ pub unsafe extern "C" fn pith_digest_base64_decode(
 ///
 /// `out` must point to `count` writable `u64`s and stay valid for the
 /// duration of the call. `count` may be zero (a no-op).
-#[unsafe(no_mangle)]
+#[cfg_attr(not(test), unsafe(no_mangle))]
 pub unsafe extern "C" fn pith_digest_xoshiro256_fill(
     seed: u64,
     out: *mut u64,
